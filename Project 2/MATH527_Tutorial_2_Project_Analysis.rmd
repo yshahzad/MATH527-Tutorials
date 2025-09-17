@@ -1,0 +1,155 @@
+---
+title: "527_Project2_Analysis"
+author: "Weixin Xiao"
+date: "2025-09-16"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+```
+
+```{r}
+# Load data and calculate Delta
+data <- read.csv("EdemaData - Copy.csv") %>%
+  mutate(Delta = Edema_Post - Edema_Pre)
+
+# Preview of first 10 rows (full analysis uses all 180 patients)
+kable(head(data, 10), digits = 3)
+```
+
+```{r}
+# Summary statistics by group
+summary_stats <- data %>%
+  group_by(Group) %>%
+  summarise(
+    N = n(),
+    Pre_Mea = mean(Edema_Pre),
+    Pre_SD = sd(Edema_Pre),
+    Pre_Med = median(Edema_Pre),
+    Post_Mea = mean(Edema_Post),
+    Post_SD = sd(Edema_Post),
+    Post_Med = median(Edema_Post),
+    Delta_Mea = mean(Delta),
+    Delta_SD = sd(Delta),
+    Delta_Med = median(Delta)
+  )
+
+kable(summary_stats, digits = 3)
+```
+
+```{r}
+# Correlation between Pre and Post by group
+correlations <- data %>%
+  group_by(Group) %>%
+  summarise(Correlation_Pre_Post = cor(Edema_Pre, Edema_Post))
+
+kable(correlations, digits = 3)
+```
+
+```{r}
+# Function to detect outliers
+detect_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25)
+  Q3 <- quantile(x, 0.75)
+  IQR <- Q3 - Q1
+  outliers <- x < (Q1 - 1.5 * IQR) | x > (Q3 + 1.5 * IQR)
+  return(outliers)
+}
+
+# Add outlier flag and summarize
+data <- data %>%
+  group_by(Group) %>%
+  mutate(Is_Outlier = detect_outliers(Delta)) %>%
+  ungroup()
+
+kable(table(data$Group, data$Is_Outlier), col.names = c("Non-Outlier", "Outlier"))
+```
+
+```{r}
+# Long format for pre/post boxplot
+data_long <- data %>%
+  pivot_longer(cols = c(Edema_Pre, Edema_Post), names_to = "Time", values_to = "Edema")
+
+# Boxplot for edema levels
+ggplot(data_long, aes(x = Time, y = Edema, fill = Group)) +
+  geom_boxplot(outlier.shape = 19, outlier.alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Edema Levels by Time and Group", x = "Time Point", y = "Edema Level") +
+  scale_fill_manual(values = c("Placebo" = "#ADD8E6", "Treatment" = "#90EE90")) +
+  scale_x_discrete(labels = c("Edema_Pre" = "Pre", "Edema_Post" = "Post"))
+
+# Boxplot for Delta
+ggplot(data, aes(x = Group, y = Delta, fill = Group)) +
+  geom_boxplot(outlier.shape = 19, outlier.alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Change in Edema (Post - Pre)", x = "Group", y = "Delta") +
+  scale_fill_manual(values = c("Placebo" = "#ADD8E6", "Treatment" = "#90EE90"))
+```
+
+```{r}
+# Reusable histogram function
+plot_histogram <- function(df, var, group_name, fill_color, title_suffix) {
+  ggplot(df, aes(x = !!sym(var))) +
+    geom_histogram(bins = 20, fill = fill_color, color = "black") +
+    theme_minimal() +
+    labs(title = paste0(title_suffix, " (", group_name, ")"), x = var, y = "Count")
+}
+```
+
+```{r}
+# Pre - Placebo
+plot_histogram(data[data$Group == "Placebo", ], "Edema_Pre", "Placebo", "#ADD8E6", "Pre-Treatment Edema")
+
+# Pre - Treatment
+plot_histogram(data[data$Group == "Treatment", ], "Edema_Pre", "Treatment", "#90EE90", "Pre-Treatment Edema")
+
+# Post - Placebo
+plot_histogram(data[data$Group == "Placebo", ], "Edema_Post", "Placebo", "#ADD8E6", "Post-Treatment Edema")
+
+# Post - Treatment
+plot_histogram(data[data$Group == "Treatment", ], "Edema_Post", "Treatment", "#90EE90", "Post-Treatment Edema")
+
+# Delta - Placebo
+plot_histogram(data[data$Group == "Placebo", ], "Delta", "Placebo", "#ADD8E6", "Delta")
+
+# Delta - Treatment
+plot_histogram(data[data$Group == "Treatment", ], "Delta", "Treatment", "#90EE90", "Delta")
+```
+
+```{r}
+# Scatterplot of Post vs Pre
+ggplot(data, aes(x = Edema_Pre, y = Edema_Post, color = Group)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Scatterplot of Post vs Pre Edema by Group", x = "Edema_Pre", y = "Edema_Post") +
+  scale_color_manual(values = c("Placebo" = "#ADD8E6", "Treatment" = "#90EE90"))
+```
+
+```{r}
+# QQ plots for Delta
+ggplot(data, aes(sample = Delta)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ Group) +
+  theme_minimal() +
+  labs(title = "QQ Plots for Delta by Group")
+
+# Shapiro-Wilk tests
+shapiro_placebo <- shapiro.test(data$Delta[data$Group == "Placebo"])
+shapiro_treatment <- shapiro.test(data$Delta[data$Group == "Treatment"])
+
+normality_results <- data.frame(
+  Group = c("Placebo", "Treatment"),
+  W = c(shapiro_placebo$statistic, shapiro_treatment$statistic),
+  p_value = c(shapiro_placebo$p.value, shapiro_treatment$p.value)
+)
+
+kable(normality_results, digits = 3, caption = "Shapiro-Wilk Normality Tests for Delta")
+```
+
