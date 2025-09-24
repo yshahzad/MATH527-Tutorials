@@ -1,0 +1,68 @@
+---
+title: "Edema LMM"
+output: html_document
+date: "2025-09-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lme4)
+library(ggplot2)
+```
+
+```{r}
+data <- read.csv("~/Desktop/Courses F2025/MATH 527/MATH527-Tutorials/Project 2/Data/EdemaData.csv", 
+    header = TRUE, sep = ",") 
+#cleaning data
+data <- data %>% mutate(trueID = ifelse(PatientID <= 90, 
+    PatientID, PatientID - 90))
+```
+
+
+```{r}
+model2 = lmer(Edema_Post ~ Edema_Pre + Group + (1|trueID), data=data)
+```
+
+
+```{r}
+# Linearity
+
+ggplot(data, aes(x = Edema_Pre, y = Edema_Post, color = Group)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Pre-treatment edema",
+       y = "Post-treatment edema",
+       title = "Post-Treatment vs Pre-treatment")
+
+```
+
+```{r}
+#Normality of Residuals
+resid <- resid(model2)
+fitted <- fitted(model2)
+
+# Q-Q plot
+qqnorm(resid)
+qqline(resid, col = "red")
+```
+
+```{r}
+# Residuals vs. Fitted Plot
+
+plot(fitted, resid,
+     xlab = "Fitted values",
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+
+```{r}
+# Distribution of random intercepts
+
+random_intercepts <- ranef(model2)$trueID[,1]
+
+ggplot(data.frame(random_intercepts), aes(x = random_intercepts)) +
+  geom_histogram(binwidth = 0.025,   # specify bin width
+                 fill = "pink", color = "black") +
+  labs(title = "Distribution of Random Intercepts",
+       x = "Random intercepts") + theme_minimal()
+```

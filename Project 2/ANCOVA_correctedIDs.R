@@ -7,12 +7,12 @@ library(gridExtra)
 
 #DATA
 #note: change the path for your own computer
-data <- read.csv("/Users/pilardaronco/Code/MATH527-Tutorials-1/Project 2/Data/EdemaData.csv", 
+data <- read.csv("~/Desktop/Courses F2025/MATH 527/MATH527-Tutorials/Project 2/Data/EdemaData.csv", 
     header = TRUE, sep = ",") 
 #cleaning data
 data <- data %>% mutate(trueID = ifelse(PatientID <= 90, 
     PatientID, PatientID - 90))
-#print(data)
+# print(data)
 
 #visualization
 #reg. boxplot
