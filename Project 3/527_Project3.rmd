@@ -1,0 +1,140 @@
+---
+title: "CTPA Interobserver Agreement Analysis"
+author: "Weixin Xiao"
+date: "2025-10-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(kableExtra)
+```
+
+```{r}
+ctpa_data <- read.csv("CTPAData.csv", stringsAsFactors = FALSE)
+
+# Create the base contingency table
+contingency_table <- table(ctpa_data$Resident, ctpa_data$Staff)
+
+# Calculate totals and percentages
+total_cases <- sum(contingency_table)
+row_totals <- rowSums(contingency_table)
+col_totals <- colSums(contingency_table)
+```
+
+```{r}
+# Create Contingency Table
+simple_table <- matrix(
+  c(
+    paste0(contingency_table["N", "N"], " (", round(contingency_table["N", "N"]/total_cases*100, 1), "%)"),
+    paste0(contingency_table["N", "P"], " (", round(contingency_table["N", "P"]/total_cases*100, 1), "%)"),
+    paste0(row_totals["N"], " (", round(row_totals["N"]/total_cases*100, 1), "%)"),
+    paste0(contingency_table["P", "N"], " (", round(contingency_table["P", "N"]/total_cases*100, 1), "%)"),
+    paste0(contingency_table["P", "P"], " (", round(contingency_table["P", "P"]/total_cases*100, 1), "%)"),
+    paste0(row_totals["P"], " (", round(row_totals["P"]/total_cases*100, 1), "%)"),
+    paste0(col_totals["N"], " (", round(col_totals["N"]/total_cases*100, 1), "%)"),
+    paste0(col_totals["P"], " (", round(col_totals["P"]/total_cases*100, 1), "%)"),
+    paste0(total_cases, " (100%)")
+  ),
+  nrow = 3,
+  ncol = 3,
+  byrow = TRUE
+)
+
+colnames(simple_table) <- c("Staff: Negative", "Staff: Positive", "Row Total")
+rownames(simple_table) <- c("Resident: Negative", "Resident: Positive", "Column Total")
+
+kable(simple_table, align = 'c') %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(3, bold = TRUE) %>%
+  column_spec(4, bold = TRUE)
+```
+
+
+```{r}
+# Calculate Cohen's Kappa
+observed_agreement <- sum(diag(contingency_table)) / total_cases
+expected_agreement <- sum((row_totals/total_cases) * (col_totals/total_cases))
+kappa_value <- (observed_agreement - expected_agreement) / (1 - expected_agreement)
+
+# Calculate 95% CI
+n <- total_cases
+p_o <- observed_agreement
+p_e <- expected_agreement
+var_kappa <- (p_o * (1 - p_o)) / (n * (1 - p_e)^2)
+se_kappa <- sqrt(var_kappa)
+ci_lower <- kappa_value - 1.96 * se_kappa
+ci_upper <- kappa_value + 1.96 * se_kappa
+
+kappa_summary <- data.frame(
+  Statistic = c("Cohen's Kappa", "95% CI Lower", "95% CI Upper"),
+  Value = c(
+    round(kappa_value, 3),
+    round(ci_lower, 3),
+    round(ci_upper, 3)
+  )
+)
+
+kable(kappa_summary, align = c('l', 'c')) %>%
+  kable_styling(full_width = FALSE)
+```
+
+```{r}
+cat("## Interpretation\n\n")
+cat("**Data Summary:**\n")
+cat("- Total CTPA studies:", total_cases, "\n")
+cat("- Overall agreement:", round(observed_agreement * 100, 1), "%\n")
+cat("- Discordant cases:", sum(contingency_table["P", "N"] + contingency_table["N", "P"]), "\n\n")
+
+cat("**Key Findings:**\n")
+cat("- Cohen's Kappa =", round(kappa_value, 3), "\n")
+cat("- 95% CI: [", round(ci_lower, 3), ",", round(ci_upper, 3), "]\n")
+```
+
+```{r}
+library(ggplot2)
+library(scales)
+
+# Prepare data with percentages
+contingency_df <- as.data.frame(contingency_table)
+names(contingency_df) <- c("Resident", "Staff", "Count")
+contingency_df$Percentage <- contingency_df$Count / total_cases * 100
+contingency_df$Label <- paste0(contingency_df$Count, "\n(", round(contingency_df$Percentage, 1), "%)")
+
+# Generate Agreement Heatmap
+ggplot(contingency_df, aes(x = Staff, y = Resident, fill = Percentage)) +
+  geom_tile(color = "white", linewidth = 1.5, width = 0.9, height = 0.9) +
+  geom_text(aes(label = Label), color = "black", size = 5, fontface = "bold") +
+  scale_fill_gradientn(
+    colors = c("#f7fbff", "#4292c6", "#08306b"),
+    values = rescale(c(0, 10, 80)),
+    name = "Percentage (%)",
+    limits = c(0, 80)
+  ) +
+  scale_x_discrete(labels = c("Negative", "Positive")) +
+  scale_y_discrete(labels = c("Negative", "Positive")) +
+  labs(
+    title = "CTPA Interpretation Agreement Matrix",
+    subtitle = "Resident vs Staff Radiologist",
+    x = "Staff Radiologist Interpretation",
+    y = "Resident Radiologist Interpretation",
+    caption = paste("Total cases:", total_cases)
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title = element_text(face = "bold"),
+    legend.position = "right",
+    panel.grid = element_blank(),
+    plot.caption = element_text(face = "italic")
+  ) +
+  coord_fixed(ratio = 1)
+```
+
+
